@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Heures">
+<meta name="theme-color" content="#2563eb">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Suivi des heures</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#667085;--bd:#e1e4e8;--ac:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2127;--tx:#eceff3;--mut:#9aa3af;--bd:#30363d;--ac:#60a5fa;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;overscroll-behavior-y:none}
+.w{max-width:760px;margin:0 auto}
+h1{font-size:20px;margin:0 0 12px}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.nav b{font-size:15px;text-align:center}
+button{min-height:44px;min-width:44px;touch-action:manipulation;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.seg button.on{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
+.hint{font-size:13px;color:var(--mut);margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.big{font-size:40px;font-weight:700}
+.row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;color:var(--mut);font-size:14px}
+.bar{position:relative;height:14px;background:var(--bd);border-radius:7px;margin:12px 0 6px;overflow:hidden}
+.fill{height:100%;background:var(--ac);width:0;transition:width .2s}
+.mk{position:absolute;top:0;bottom:0;width:2px;background:var(--tx);opacity:.5}
+.day{border-top:1px solid var(--bd);padding:12px 0}
+.day:first-child{border-top:0;padding-top:0}
+.dh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.dh b{font-size:16px}
+.f{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:2px}
+input{width:100%;min-height:44px;-webkit-appearance:none;appearance:none;font-size:16px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+.i{font-size:13px;margin-top:8px;color:var(--mut)}
+.eq{font-size:14px;color:var(--mut);margin-top:4px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.tot{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>Suivi des heures</h1>
+<div class="nav"><button id="prev" aria-label="Semaine précédente">←</button><b id="wk"></b><button id="next" aria-label="Semaine suivante">→</button></div>
+<div class="seg"><button id="tm">Semaine de matin</button><button id="ta">Semaine d’après-midi</button></div>
+<div class="hint" id="rules"></div>
+
+<div class="card">
+<div class="row"><span>Cumul de la semaine</span><span id="stat"></span></div>
+<div class="big" id="net">0h00</div>
+<div class="eq" id="eq"></div>
+<div class="bar"><div class="fill" id="fill"></div><div class="mk" id="mk"></div></div>
+<div class="row"><span>0h</span><span>Min 36h · Max 39h</span></div>
+<div class="i" id="sum"></div>
+</div>
+
+<div class="card">
+<label for="cr">Crédit d’heures utilisé cette semaine (soustrait du cumul)</label>
+<input id="cr" type="time">
+</div>
+
+<div class="card tot"><div><div class="row"><span>Cumul total</span></div><div class="big" id="gt" style="font-size:30px">0h00</div></div><div class="row" id="gn" style="text-align:right"></div></div>
+
+<div class="card" id="days"></div>
+<div class="row" style="align-items:center"><span>Pause par défaut : <input id="dp" type="number" min="0" step="5" value="35" style="width:80px;display:inline"> min</span><button id="rst">Vider la semaine</button></div>
+</div>
+<script>
+var DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
+var MIN=[450,450,450,450,360],WMIN=2160,WMAX=2340,PMIN=35;
+var off=0,wk=blank(),defPause=35;
+function blank(){return{t:"m",d:{},c:""}}
+function sg(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function ss(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function mon(o){var d=new Date();d.setHours(12,0,0,0);var w=(d.getDay()+6)%7;d.setDate(d.getDate()-w+o*7);return d}
+function key(){var d=mon(off);return "w:"+d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate()}
+function load(){var r=sg(key());try{wk=r?JSON.parse(r):blank()}catch(e){wk=blank()}if(!wk||!wk.d)wk=blank();var p=sg("w-pause");if(p!==null&&!isNaN(+p))defPause=+p}
+function save(){ss(key(),JSON.stringify(wk))}
+function tm(s){if(!s)return null;var a=s.split(":");return +a[0]*60+ +a[1]}
+function fm(m){var s=m<0?"-":"";m=Math.abs(Math.round(m));return s+Math.floor(m/60)+"h"+String(m%60).padStart(2,"0")}
+function ft(m){return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")}
+function rl(t,i){
+ if(t==="m")return{amin:300,amax:null,dmax:i===4?720:780};
+ return i===4?{amin:705,amax:null,dmax:1080}:{amin:765,amax:780,dmax:1215};
+}
+function pz(o,i){var v=(o.d[i]||{}).p;return(v===undefined||v==="")?defPause:+v}
+function gross(o){
+ var g=0;
+ for(var i=0;i<5;i++){var r=o.d[i]||{},a=tm(r.a),d=tm(r.d);if(a!==null&&d!==null&&d>a)g+=Math.max(d-a-pz(o,i),0)}
+ return g;
+}
+function grand(){
+ var t=0,n=0;
+ try{
+  for(var k=0;k<localStorage.length;k++){
+   var ky=localStorage.key(k);
+   if(ky&&ky.indexOf("w:")===0){
+    var o=JSON.parse(localStorage.getItem(ky));
+    if(o&&o.d){var g=gross(o),c=tm(o.c)||0;if(g>0||c>0){t+=g-c;n++}}
+   }
+  }
+ }catch(e){}
+ return{t:t,n:n};
+}
+function render(){
+ var d0=mon(off),d4=new Date(d0);d4.setDate(d4.getDate()+4);
+ var o={day:"numeric",month:"short"};
+ document.getElementById("wk").textContent="Semaine du "+d0.toLocaleDateString("fr-FR",o)+" au "+d4.toLocaleDateString("fr-FR",o);
+ document.getElementById("dp").value=defPause;
+ document.getElementById("cr").value=wk.c||"";
+ var h="";
+ for(var i=0;i<5;i++){
+  var r=wk.d[i]||{};
+  h+='<div class="day"><div class="dh"><b>'+DAYS[i]+'</b><span id="n'+i+'"></span></div><div class="f">'
+  +'<div><label>Arrivée</label><input type="time" data-i="'+i+'" data-k="a" value="'+(r.a||"")+'"></div>'
+  +'<div><label>Départ</label><input type="time" data-i="'+i+'" data-k="d" value="'+(r.d||"")+'"></div>'
+  +'<div><label>Pause (min)</label><input type="number" min="0" step="5" data-i="'+i+'" data-k="p" value="'+pz(wk,i)+'"></div>'
+  +'</div><div class="i" id="m'+i+'"></div></div>';
+ }
+ document.getElementById("days").innerHTML=h;
+ var els=document.querySelectorAll("#days input");
+ for(var j=0;j<els.length;j++)els[j].addEventListener("input",function(e){var t=e.target,i=t.getAttribute("data-i");wk.d[i]=wk.d[i]||{};wk.d[i][t.getAttribute("data-k")]=t.value;save();calc()});
+ calc();
+}
+function calc(){
+ var t=wk.t;
+ document.getElementById("tm").className=t==="m"?"on":"";
+ document.getElementById("ta").className=t==="a"?"on":"";
+ document.getElementById("rules").textContent=t==="m"
+  ?"Matin : arrivée dès 5h00 · départ 13h max (vendredi 12h max)"
+  :"Après-midi : arrivée 12h45–13h, départ 20h15 max · vendredi 11h45 à 18h max";
+ var run=0;
+ for(var i=0;i<5;i++){
+  var r=wk.d[i]||{},a=tm(r.a),d=tm(r.d),p=pz(wk,i),R=rl(t,i);
+  var n=document.getElementById("n"+i),m=document.getElementById("m"+i),msg=[];
+  if(a!==null){
+   if(a<R.amin)msg.push('<span class="warn">Arrivée avant '+ft(R.amin)+'.</span>');
+   if(R.amax!==null&&a>R.amax)msg.push('<span class="warn">Arrivée après '+ft(R.amax)+'.</span>');
+  }
+  if(d!==null&&d>R.dmax)msg.push('<span class="warn">Départ après '+ft(R.dmax)+'.</span>');
+  if(a!==null&&d!==null&&d>a){
+   var net=d-a-p;run+=Math.max(net,0);
+   n.textContent=fm(net)+" / "+fm(MIN[i]);n.className=net>=MIN[i]?"ok":"bad";
+   if(net<MIN[i])msg.push('<span class="bad">Il manque '+fm(MIN[i]-net)+' pour le minimum du jour.</span>');
+   if(p<PMIN)msg.push('<span class="warn">Pause inférieure à 35 min.</span>');
+   msg.push("Cumul semaine : <b>"+fm(run)+"</b>");
+  }else{
+   n.textContent="—";n.className="";
+   if(a!==null){
+    var g=a+p+MIN[i];
+    if(g>R.dmax)msg.push('<span class="bad">Minimum du jour impossible avant '+ft(R.dmax)+' (départ conseillé '+ft(g)+').</span>');
+    else msg.push("Départ conseillé : <b>"+ft(g)+"</b> pour le minimum du jour.");
+   }else msg.push("Renseigne l’arrivée et le départ.");
+  }
+  m.innerHTML=msg.join(" ");
+ }
+ var c=tm(wk.c)||0,net=run-c;
+ document.getElementById("net").textContent=fm(net);
+ document.getElementById("eq").textContent=c>0?fm(run)+" travaillées − "+fm(c)+" de crédit":"Aucun crédit utilisé";
+ document.getElementById("fill").style.width=Math.min(Math.max(net,0)/WMAX*100,100)+"%";
+ document.getElementById("mk").style.left=(WMIN/WMAX*100)+"%";
+ var st=document.getElementById("stat"),s=document.getElementById("sum");
+ if(net>WMAX){st.textContent="Au-dessus du max";st.className="bad";s.innerHTML='<span class="bad">Dépassement de '+fm(net-WMAX)+' sur 39h.</span>'}
+ else if(net>=WMIN){st.textContent="Dans la fourchette";st.className="ok";s.innerHTML='<span class="ok">36h atteintes.</span> Marge avant 39h : <b>'+fm(WMAX-net)+'</b>.'}
+ else{st.textContent="En cours";st.className="warn";s.innerHTML='Il manque <b>'+fm(WMIN-net)+'</b> pour atteindre 36h · <b>'+fm(WMAX-net)+'</b> avant 39h.'}
+ var G=grand();
+ document.getElementById("gt").textContent=fm(G.t);
+ document.getElementById("gn").textContent=G.n+(G.n>1?" semaines":" semaine");
+}
+document.getElementById("prev").onclick=function(){off--;load();render()};
+document.getElementById("next").onclick=function(){off++;load();render()};
+document.getElementById("tm").onclick=function(){wk.t="m";save();calc()};
+document.getElementById("ta").onclick=function(){wk.t="a";save();calc()};
+document.getElementById("cr").oninput=function(e){wk.c=e.target.value;save();calc()};
+document.getElementById("dp").oninput=function(e){defPause=Math.max(+e.target.value||0,0);ss("w-pause",defPause);calc()};
+document.getElementById("rst").onclick=function(){wk=blank();save();render()};
+load();render();
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+</script>
+</body>
+</html>
