@@ -23,7 +23,7 @@ h1{font-size:20px;margin:0 0 12px}
 .nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .nav b{font-size:15px;text-align:center}
 button{min-height:44px;min-width:44px;touch-action:manipulation;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
 .seg button.on{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}
 .hint{font-size:13px;color:var(--mut);margin-bottom:12px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
@@ -36,7 +36,7 @@ button{min-height:44px;min-width:44px;touch-action:manipulation;background:var(-
 .day:first-child{border-top:0;padding-top:0}
 .dh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
 .dh b{font-size:16px}
-.f{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.f{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 label{font-size:12px;color:var(--mut);display:block;margin-bottom:2px}
 input{width:100%;min-height:44px;-webkit-appearance:none;appearance:none;font-size:16px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
 .i{font-size:13px;margin-top:8px;color:var(--mut)}
@@ -49,7 +49,7 @@ input{width:100%;min-height:44px;-webkit-appearance:none;appearance:none;font-si
 <div class="w">
 <h1>Suivi des heures</h1>
 <div class="nav"><button id="prev" aria-label="Semaine précédente">←</button><b id="wk"></b><button id="next" aria-label="Semaine suivante">→</button></div>
-<div class="seg"><button id="tm">Semaine de matin</button><button id="ta">Semaine d’après-midi</button></div>
+<div class="seg"><button id="tm">Matin</button><button id="ta">Après-midi</button><button id="td">Décalée</button></div>
 <div class="hint" id="rules"></div>
 
 <div class="card">
@@ -59,6 +59,9 @@ input{width:100%;min-height:44px;-webkit-appearance:none;appearance:none;font-si
 <div class="bar"><div class="fill" id="fill"></div><div class="mk" id="mk"></div></div>
 <div class="row"><span>0h</span><span>Min 36h · Max 39h</span></div>
 <div class="i" id="sum"></div>
+<div class="i" id="live"></div>
+<div class="row" style="margin-top:12px"><span>Avance de la semaine (au-dessus du minimum du jour)</span></div>
+<div class="big ok" id="adv" style="font-size:28px">+0h00</div>
 </div>
 
 <div class="card">
@@ -69,40 +72,48 @@ input{width:100%;min-height:44px;-webkit-appearance:none;appearance:none;font-si
 <div class="card tot"><div><div class="row"><span>Cumul total</span></div><div class="big" id="gt" style="font-size:30px">0h00</div></div><div class="row" id="gn" style="text-align:right"></div></div>
 
 <div class="card" id="days"></div>
-<div class="row" style="align-items:center"><span>Pause par défaut : <input id="dp" type="number" min="0" step="5" value="35" style="width:80px;display:inline"> min</span><button id="rst">Vider la semaine</button></div>
+<div class="row" style="align-items:center;justify-content:flex-end"><button id="rst">Vider la semaine</button></div>
 </div>
 <script>
 var DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
-var MIN=[450,450,450,450,360],WMIN=2160,WMAX=2340,PMIN=35;
-var off=0,wk=blank(),defPause=35;
+var MIN=[450,450,450,450,360],WMIN=2160,WMAX=2340,PMIN=30;
+var off=0,wk=blank(),defPause=30;
 function blank(){return{t:"m",d:{},c:""}}
 function sg(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function ss(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function mon(o){var d=new Date();d.setHours(12,0,0,0);var w=(d.getDay()+6)%7;d.setDate(d.getDate()-w+o*7);return d}
-function key(){var d=mon(off);return "w:"+d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate()}
-function load(){var r=sg(key());try{wk=r?JSON.parse(r):blank()}catch(e){wk=blank()}if(!wk||!wk.d)wk=blank();var p=sg("w-pause");if(p!==null&&!isNaN(+p))defPause=+p}
+function key(x){var d=mon(x===undefined?off:x);return "w:"+d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate()}
+function load(){var r=sg(key());try{wk=r?JSON.parse(r):blank()}catch(e){wk=blank()}if(!wk||!wk.d)wk=blank();var p=sg("w-pause2");if(p!==null&&!isNaN(+p))defPause=+p}
 function save(){ss(key(),JSON.stringify(wk))}
 function tm(s){if(!s)return null;var a=s.split(":");return +a[0]*60+ +a[1]}
 function fm(m){var s=m<0?"-":"";m=Math.abs(Math.round(m));return s+Math.floor(m/60)+"h"+String(m%60).padStart(2,"0")}
 function ft(m){return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")}
 function rl(t,i){
- if(t==="m")return{amin:300,amax:null,dmax:i===4?720:780};
- return i===4?{amin:705,amax:null,dmax:1080}:{amin:765,amax:780,dmax:1215};
+ if(t==="m")return{amin:300,amax:null,dmin:null,dmax:i===4?720:780};
+ if(t==="d")return i===4?{amin:420,amax:660,dmin:900,dmax:1110}:{amin:390,amax:660,dmin:900,dmax:1140};
+ return i===4?{amin:705,amax:null,dmin:null,dmax:1080}:{amin:765,amax:780,dmin:null,dmax:1215};
 }
-function pz(o,i){var v=(o.d[i]||{}).p;return(v===undefined||v==="")?defPause:+v}
+function pz(o,i){return 0}
 function gross(o){
  var g=0;
  for(var i=0;i<5;i++){var r=o.d[i]||{},a=tm(r.a),d=tm(r.d);if(a!==null&&d!==null&&d>a)g+=Math.max(d-a-pz(o,i),0)}
  return g;
 }
+function liveInfo(o){
+ var i=(new Date().getDay()+6)%7;if(i>4)return null;
+ var r=o.d[i]||{},a=tm(r.a);if(a===null||tm(r.d)!==null)return null;
+ var n=new Date(),now=n.getHours()*60+n.getMinutes();if(now<=a)return null;
+ var p=pz(o,i),ps=a<720?720:a+180,ded=Math.min(Math.max(now-ps,0),p);
+ return{i:i,m:Math.max(now-a-ded,0),a:a,p:p};
+}
 function grand(){
- var t=0,n=0;
+ var t=0,n=0,cur=key(0);
  try{
   for(var k=0;k<localStorage.length;k++){
    var ky=localStorage.key(k);
    if(ky&&ky.indexOf("w:")===0){
     var o=JSON.parse(localStorage.getItem(ky));
-    if(o&&o.d){var g=gross(o),c=tm(o.c)||0;if(g>0||c>0){t+=g-c;n++}}
+    if(o&&o.d){var g=gross(o),l=(ky===cur)?liveInfo(o):null;if(l)g+=l.m;var c=tm(o.c)||0;if(g>0||c>0){t+=g-c;n++}}
    }
   }
  }catch(e){}
@@ -112,7 +123,6 @@ function render(){
  var d0=mon(off),d4=new Date(d0);d4.setDate(d4.getDate()+4);
  var o={day:"numeric",month:"short"};
  document.getElementById("wk").textContent="Semaine du "+d0.toLocaleDateString("fr-FR",o)+" au "+d4.toLocaleDateString("fr-FR",o);
- document.getElementById("dp").value=defPause;
  document.getElementById("cr").value=wk.c||"";
  var h="";
  for(var i=0;i<5;i++){
@@ -120,7 +130,6 @@ function render(){
   h+='<div class="day"><div class="dh"><b>'+DAYS[i]+'</b><span id="n'+i+'"></span></div><div class="f">'
   +'<div><label>Arrivée</label><input type="time" data-i="'+i+'" data-k="a" value="'+(r.a||"")+'"></div>'
   +'<div><label>Départ</label><input type="time" data-i="'+i+'" data-k="d" value="'+(r.d||"")+'"></div>'
-  +'<div><label>Pause (min)</label><input type="number" min="0" step="5" data-i="'+i+'" data-k="p" value="'+pz(wk,i)+'"></div>'
   +'</div><div class="i" id="m'+i+'"></div></div>';
  }
  document.getElementById("days").innerHTML=h;
@@ -129,13 +138,15 @@ function render(){
  calc();
 }
 function calc(){
- var t=wk.t;
+ var t=wk.t,live=(off===0)?liveInfo(wk):null;
  document.getElementById("tm").className=t==="m"?"on":"";
  document.getElementById("ta").className=t==="a"?"on":"";
+ document.getElementById("td").className=t==="d"?"on":"";
  document.getElementById("rules").textContent=t==="m"
   ?"Matin : arrivée dès 5h00 · départ 13h max (vendredi 12h max)"
-  :"Après-midi : arrivée 12h45–13h, départ 20h15 max · vendredi 11h45 à 18h max";
- var run=0;
+  :t==="a"?"Après-midi : arrivée 12h45–13h, départ 20h15 max · vendredi 11h45 à 18h max"
+  :"Décalée : arrivée 6h30–11h, départ 15h–19h · vendredi arrivée 7h–11h, départ 15h–18h30";
+ var run=0,adv=0,liveMsg="";
  for(var i=0;i<5;i++){
   var r=wk.d[i]||{},a=tm(r.a),d=tm(r.d),p=pz(wk,i),R=rl(t,i);
   var n=document.getElementById("n"+i),m=document.getElementById("m"+i),msg=[];
@@ -144,31 +155,45 @@ function calc(){
    if(R.amax!==null&&a>R.amax)msg.push('<span class="warn">Arrivée après '+ft(R.amax)+'.</span>');
   }
   if(d!==null&&d>R.dmax)msg.push('<span class="warn">Départ après '+ft(R.dmax)+'.</span>');
+  if(d!==null&&R.dmin!==null&&d<R.dmin)msg.push('<span class="warn">Départ avant '+ft(R.dmin)+'.</span>');
   if(a!==null&&d!==null&&d>a){
    var net=d-a-p;run+=Math.max(net,0);
    n.textContent=fm(net)+" / "+fm(MIN[i]);n.className=net>=MIN[i]?"ok":"bad";
    if(net<MIN[i])msg.push('<span class="bad">Il manque '+fm(MIN[i]-net)+' pour le minimum du jour.</span>');
-   if(p<PMIN)msg.push('<span class="warn">Pause inférieure à 35 min.</span>');
+   var ex=Math.max(net-MIN[i],0);adv+=ex;
+   msg.push('Avance du jour : <b class="ok">+'+fm(ex)+'</b> · Avance cumulée : <b class="ok">+'+fm(adv)+'</b>');
    msg.push("Cumul semaine : <b>"+fm(run)+"</b>");
+  }else if(live&&live.i===i){
+   run+=live.m;
+   var g=Math.max(a+p+MIN[i],R.dmin||0);
+   n.textContent=fm(live.m)+" / "+fm(MIN[i])+" ● en cours";n.className="warn";
+   var exl=Math.max(live.m-MIN[i],0);adv+=exl;
+   if(g>R.dmax)msg.push('<span class="bad">Minimum du jour impossible avant '+ft(R.dmax)+'.</span>');
+   else msg.push("Départ possible dès <b>"+ft(g)+"</b>.");
+   msg.push('Avance du jour : <b class="ok">+'+fm(exl)+'</b> · Avance cumulée : <b class="ok">+'+fm(adv)+'</b>');
+   msg.push("Cumul semaine : <b>"+fm(run)+"</b>");
+   liveMsg="● En direct : aujourd’hui <b>"+fm(live.m)+"</b> (depuis "+ft(a)+") · départ possible dès <b>"+ft(g)+"</b>.";
   }else{
    n.textContent="—";n.className="";
    if(a!==null){
-    var g=a+p+MIN[i];
-    if(g>R.dmax)msg.push('<span class="bad">Minimum du jour impossible avant '+ft(R.dmax)+' (départ conseillé '+ft(g)+').</span>');
-    else msg.push("Départ conseillé : <b>"+ft(g)+"</b> pour le minimum du jour.");
+    var g2=Math.max(a+p+MIN[i],R.dmin||0);
+    if(g2>R.dmax)msg.push('<span class="bad">Minimum du jour impossible avant '+ft(R.dmax)+' (départ conseillé '+ft(g2)+').</span>');
+    else msg.push("Départ conseillé : <b>"+ft(g2)+"</b> pour le minimum du jour.");
    }else msg.push("Renseigne l’arrivée et le départ.");
   }
   m.innerHTML=msg.join(" ");
  }
- var c=tm(wk.c)||0,net=run-c;
- document.getElementById("net").textContent=fm(net);
+ document.getElementById("live").innerHTML=liveMsg;
+ document.getElementById("adv").textContent="+"+fm(adv);
+ var c=tm(wk.c)||0,net2=run-c;
+ document.getElementById("net").textContent=fm(net2);
  document.getElementById("eq").textContent=c>0?fm(run)+" travaillées − "+fm(c)+" de crédit":"Aucun crédit utilisé";
- document.getElementById("fill").style.width=Math.min(Math.max(net,0)/WMAX*100,100)+"%";
+ document.getElementById("fill").style.width=Math.min(Math.max(net2,0)/WMAX*100,100)+"%";
  document.getElementById("mk").style.left=(WMIN/WMAX*100)+"%";
  var st=document.getElementById("stat"),s=document.getElementById("sum");
- if(net>WMAX){st.textContent="Au-dessus du max";st.className="bad";s.innerHTML='<span class="bad">Dépassement de '+fm(net-WMAX)+' sur 39h.</span>'}
- else if(net>=WMIN){st.textContent="Dans la fourchette";st.className="ok";s.innerHTML='<span class="ok">36h atteintes.</span> Marge avant 39h : <b>'+fm(WMAX-net)+'</b>.'}
- else{st.textContent="En cours";st.className="warn";s.innerHTML='Il manque <b>'+fm(WMIN-net)+'</b> pour atteindre 36h · <b>'+fm(WMAX-net)+'</b> avant 39h.'}
+ if(net2>WMAX){st.textContent="Au-dessus du max";st.className="bad";s.innerHTML='<span class="bad">Dépassement de '+fm(net2-WMAX)+' sur 39h.</span>'}
+ else if(net2>=WMIN){st.textContent="Dans la fourchette";st.className="ok";s.innerHTML='<span class="ok">36h atteintes.</span> Marge avant 39h : <b>'+fm(WMAX-net2)+'</b>.'}
+ else{st.textContent="En cours";st.className="warn";s.innerHTML='Il manque <b>'+fm(WMIN-net2)+'</b> pour atteindre 36h · <b>'+fm(WMAX-net2)+'</b> avant 39h.'}
  var G=grand();
  document.getElementById("gt").textContent=fm(G.t);
  document.getElementById("gn").textContent=G.n+(G.n>1?" semaines":" semaine");
@@ -177,10 +202,12 @@ document.getElementById("prev").onclick=function(){off--;load();render()};
 document.getElementById("next").onclick=function(){off++;load();render()};
 document.getElementById("tm").onclick=function(){wk.t="m";save();calc()};
 document.getElementById("ta").onclick=function(){wk.t="a";save();calc()};
+document.getElementById("td").onclick=function(){wk.t="d";save();calc()};
 document.getElementById("cr").oninput=function(e){wk.c=e.target.value;save();calc()};
-document.getElementById("dp").oninput=function(e){defPause=Math.max(+e.target.value||0,0);ss("w-pause",defPause);calc()};
 document.getElementById("rst").onclick=function(){wk=blank();save();render()};
 load();render();
+setInterval(calc,30000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)calc()});
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 </script>
 </body>
